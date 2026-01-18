@@ -275,7 +275,12 @@ def analisar_doc(texto_full, perfil, api_key):
 # ==============================================================================
 perfil = carregar_perfil()
 st.sidebar.title("🚀 Edital.IA")
-api_key = st.sidebar.text_input("🔑 API Key", value=perfil.get('api_key', ''), type="password")
+
+# Tenta pegar a chave do cofre automaticamente
+if "GOOGLE_API_KEY" in st.secrets:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+else:
+    api_key = st.sidebar.text_input("🔑 API Key", value=perfil.get('api_key', ''), type="password")
 
 st.sidebar.header("1. Solicitante")
 tipo_perfil = st.sidebar.radio("Entidade:", ["Pessoa Física (CPF)", "Empresa (CNPJ)"], index=0 if perfil.get('tipo_entidade') == "Pessoa Física (CPF)" else 1)
@@ -466,4 +471,5 @@ with tab_questions:
                 else:
                     st.error("🛑 CUIDADO! Muitos pontos cruciais estão pendentes.")
     else:
+
         st.info("ℹ️ Faça a análise na Aba 1 para gerar este questionário personalizado.")
