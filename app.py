@@ -1,6 +1,6 @@
 """
-NOME DO PROJETO: Edital.IA (Versão 19.18 - Google Sheets Connected)
-VERSÃO: MVP 19.18 (Salva dados na Planilha do Google + Feedback + Deep Match)
+NOME DO PROJETO: Edital.IA (Versão 19.19 - Smart Tags & Prazos)
+VERSÃO: MVP 19.19 (Google Sheets + Alerta de Prazo + Alerta PJ)
 AUTOR: Lucas Almeida (Rota Fácil / Açaicat)
 DATA: Janeiro/2026
 DEPÊNDENCIA: pip install fpdf gspread oauth2client
@@ -45,7 +45,7 @@ st.markdown("""
 
 st.markdown("""
     <style>
-    /* Estilos mantidos das versões anteriores */
+    /* Estilos Visuais Gerais */
     .tip-card { background-color: #fff3cd; color: #856404; border-left: 5px solid #ffc107; padding: 10px; margin-bottom: 5px; font-size: 14px; }
     .doc-card { background-color: #e2e3e5; color: #383d41; border-radius: 5px; padding: 8px; margin-bottom: 5px; border-left: 5px solid #6c757d; font-size: 14px; }
     .date-card { background-color: #cfe2ff; color: #084298; padding: 8px; border-radius: 5px; margin-bottom: 5px; border: 1px solid #b6d4fe; font-weight: bold; }
@@ -62,6 +62,13 @@ st.markdown("""
     .forbidden-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; }
     .question-box { background-color: #ffffff; color: #000000; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .question-header { font-weight: bold; color: #007bff; margin-bottom: 5px; text-transform: uppercase; font-size: 12px; }
+    
+    /* NOVAS TAGS INTELIGENTES */
+    .tag-expired { background-color: #ffe6e6; color: #cc0000; border: 1px solid #ff9999; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; margin-right: 8px; vertical-align: middle; }
+    .tag-open { background-color: #e6fffa; color: #006644; border: 1px solid #99f2d1; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; margin-right: 8px; vertical-align: middle; }
+    .tag-pj { background-color: #f0f2f5; color: #1c1e21; border: 1px solid #ccd0d5; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; margin-right: 8px; vertical-align: middle; }
+    .tag-match { background-color: #e6f3ff; color: #0052cc; border: 1px solid #b3d9ff; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; margin-right: 8px; vertical-align: middle; }
+
     .feedback-container { border: 2px dashed #6c757d; padding: 20px; border-radius: 10px; text-align: center; background-color: #f8f9fa; margin-top: 20px; }
     </style>
     """, unsafe_allow_html=True)
@@ -143,6 +150,7 @@ def gerar_relatorio_pdf(dados, user_data):
 
     raio_x = dados.get("dados_do_edital", {})
     analise = dados.get("analise_compatibilidade", {})
+    elegibilidade = dados.get("elegibilidade_basica", {})
     docs_analise = dados.get("analise_documental_extra", []) 
     checklist = dados.get("plano_acao_cronograma", [])
     riscos = dados.get("radar_de_riscos", [])
@@ -152,6 +160,19 @@ def gerar_relatorio_pdf(dados, user_data):
     if "APROVADO" in res.upper(): pdf.set_text_color(0, 128, 0)
     else: pdf.set_text_color(200, 0, 0)
     pdf.cell(0, 10, limpar_texto_pdf(f"RESULTADO: {res}"), ln=True)
+    
+    # --- DADOS DE ELEGIBILIDADE NO PDF ---
+    pdf.set_text_color(0,0,0); pdf.set_font("Arial", "B", 10)
+    prazo_status = elegibilidade.get('status_prazo', 'N/A')
+    prazo_data = elegibilidade.get('data_limite_inscricao', 'N/A')
+    pdf.cell(0, 6, limpar_texto_pdf(f"Prazo: {prazo_status} (Fim: {prazo_data})"), ln=True)
+    if elegibilidade.get('exige_cnpj'):
+        pdf.cell(0, 6, "Exige CNPJ: SIM", ln=True)
+    else:
+        pdf.cell(0, 6, "Exige CNPJ: NAO", ln=True)
+    pdf.ln(2)
+    # -------------------------------------
+
     pdf.set_text_color(0, 0, 0) 
     pdf.set_font("Arial", "", 11)
     pdf.multi_cell(0, 6, limpar_texto_pdf(f"Motivo Principal: {analise.get('motivo_principal', '')}"))
@@ -233,8 +254,18 @@ def analisar_doc(texto_edital, texto_empresa, perfil, api_key):
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("models/gemini-2.5-flash")
     
+    # --- DATA DE HOJE PARA VERIFICAR PRAZOS ---
+    hoje_str = datetime.date.today().strftime("%d/%m/%Y")
+    
     prompt = f"""
     ATUE COMO: Auditor Sênior de Riscos em Editais Públicos.
+    HOJE É DIA: {hoje_str} (Use esta data para verificar rigorosamente se o edital está vencido).
+    
+    INSTRUÇÃO CRUCIAL SOBRE PRAZOS:
+    - Verifique se há 'Prorrogação', 'Retificação' ou 'Aditivo' no texto que altere a data final.
+    - Se a data limite for anterior a {hoje_str}, marque status_prazo como "ENCERRADO".
+    - Se a data limite for posterior ou igual a {hoje_str}, marque como "ABERTO".
+
     CONTEXTO:
     1. PERFIL: {json.dumps(perfil, indent=2, ensure_ascii=False)}
     2. DOCS EMPRESA: {texto_empresa[:200000]} 
@@ -242,6 +273,12 @@ def analisar_doc(texto_edital, texto_empresa, perfil, api_key):
     
     SAÍDA JSON OBRIGATÓRIA:
     {{
+        "elegibilidade_basica": {{
+            "data_limite_inscricao": "DD/MM/AAAA",
+            "status_prazo": "ABERTO" ou "ENCERRADO",
+            "publico_alvo": "PESSOA JURIDICA" ou "PESSOA FISICA" ou "AMBOS",
+            "exige_cnpj": true/false
+        }},
         "dados_do_edital": {{
             "objetivo_resumido": "Texto curto.",
             "cronograma_chaves": ["Data 1", "Data 2"],
@@ -384,12 +421,45 @@ with tab_ia:
             docs_extra = dados_brutos.get("analise_documental_extra", [])
             riscos = dados_brutos.get("radar_de_riscos", [])
             
-            st.subheader("⚖️ Veredito IA (Auditoria)")
-            res = analise.get('resultado', 'EM ANÁLISE')
-            if "APROVADO" in res.upper(): st.markdown(f'<div class="status-aprovado">✅ {res}</div>', unsafe_allow_html=True)
-            elif "ATENÇÃO" in res.upper(): st.markdown(f'<div class="tip-card">⚠️ {res}</div>', unsafe_allow_html=True)
-            else: st.markdown(f'<div class="status-reprovado">🚫 {res}</div>', unsafe_allow_html=True)
+            # --- NOVAS VERIFICAÇÕES (V19.19) ---
+            elegibilidade = dados_brutos.get("elegibilidade_basica", {})
+            status_prazo = elegibilidade.get("status_prazo", "ABERTO")
+            data_limite = elegibilidade.get("data_limite_inscricao", "N/A")
+            exige_cnpj = elegibilidade.get("exige_cnpj", False)
             
+            st.subheader("⚖️ Veredito IA (Auditoria)")
+
+            # --- RENDERIZAÇÃO DAS SMART TAGS ---
+            cols_tags = st.columns([1, 1, 1, 3])
+            
+            # 1. TAG DE PRAZO
+            with cols_tags[0]:
+                if status_prazo == "ENCERRADO":
+                    st.markdown(f'<div class="tag-expired">📅 ENCERRADO ({data_limite})</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="tag-open">📅 PRAZO ABERTO ({data_limite})</div>', unsafe_allow_html=True)
+            
+            # 2. TAG DE PJ
+            with cols_tags[1]:
+                if exige_cnpj:
+                    # Verifica se o usuário é PF
+                    tipo_usuario = st.session_state['user_data_cache']['juridico']['tipo']
+                    if "Pessoa Física" in tipo_usuario:
+                        st.markdown(f'<div class="tag-expired">🏢 EXCLUSIVO PJ (Você é PF)</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="tag-pj">🏢 EXIGE CNPJ</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="tag-open">👤 ACEITA PF/PJ</div>', unsafe_allow_html=True)
+
+            # 3. TAG MATCH
+            with cols_tags[2]:
+                res = analise.get('resultado', 'ANÁLISE')
+                if "APROVADO" in res.upper(): st.markdown(f'<div class="tag-match">✅ ALTO MATCH</div>', unsafe_allow_html=True)
+                elif "ATENÇÃO" in res.upper(): st.markdown(f'<div class="tag-pj">⚠️ ATENÇÃO</div>', unsafe_allow_html=True)
+                else: st.markdown(f'<div class="tag-expired">🚫 BAIXO MATCH</div>', unsafe_allow_html=True)
+            
+            # --- FIM DAS TAGS ---
+
             st.write("")
             st.write(f"**Parecer:** {analise.get('motivo_principal', '')}")
             
