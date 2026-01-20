@@ -1,6 +1,6 @@
 """
 NOME DO PROJETO: Edital.IA (Versão 19.48 - Conversion Ready - Professional UI)
-VERSÃO: MVP 19.48 (UI Refinada)
+VERSÃO: MVP 19.48 (UI Refinada & Bugfix Feedback)
 AUTOR: Lucas Almeida (Rota Fácil / Açaicat)
 DATA: Janeiro/2026
 DEPÊNDENCIA: pip install fpdf gspread oauth2client google-generativeai pypdf2 streamlit
@@ -657,7 +657,8 @@ with tab_analise:
         st.markdown("### Baixar Relatório (PDF)")
         fb = st.feedback("faces")
         if fb is not None:
-            registrar_evento_analytics(nome_projeto, setor, "Edital", res_txt, fb)
+            # CORREÇÃO AQUI: Mudamos 'res_txt' para 'res'
+            registrar_evento_analytics(nome_projeto, setor, "Edital", res, fb)
             if TEM_PDF:
                 pdf_data = gerar_relatorio_pdf(dados, st.session_state['user_data'])
                 st.download_button("BAIXAR RELATÓRIO", data=pdf_data, file_name="analise.pdf", mime="application/pdf", type="primary")
