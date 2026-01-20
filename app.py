@@ -1,9 +1,9 @@
 """
-NOME DO PROJETO: Edital.IA (Versão 19.19 - Smart Tags & Prazos)
-VERSÃO: MVP 19.19 (Google Sheets + Alerta de Prazo + Alerta PJ)
+NOME DO PROJETO: Edital.IA (Versão 19.48 - Conversion Ready)
+VERSÃO: MVP 19.48 (Adição de Dicas Estratégicas + Botão WhatsApp do Especialista)
 AUTOR: Lucas Almeida (Rota Fácil / Açaicat)
 DATA: Janeiro/2026
-DEPÊNDENCIA: pip install fpdf gspread oauth2client
+DEPÊNDENCIA: pip install fpdf gspread oauth2client google-generativeai pypdf2 streamlit
 """
 
 import streamlit as st
@@ -13,10 +13,8 @@ import os
 from PyPDF2 import PdfReader
 import datetime
 import time
-import re
-import unicodedata
 
-# --- IMPORTAÇÕES PARA GOOGLE SHEETS ---
+# --- IMPORTAÇÕES OPCIONAIS ---
 try:
     import gspread
     from oauth2client.service_account import ServiceAccountCredentials
@@ -24,7 +22,6 @@ try:
 except ImportError:
     TEM_GSPREAD = False
 
-# Tenta importar FPDF
 try:
     from fpdf import FPDF
     TEM_PDF = True
@@ -34,54 +31,68 @@ except ImportError:
 # ==============================================================================
 # 1. CONFIGURAÇÃO VISUAL
 # ==============================================================================
-st.set_page_config(page_title="Edital.IA", layout="wide", page_icon="🚀")
-
-# --- BANNER BETA ---
-st.markdown("""
-<div style="background-color: #d1e7dd; color: #0f5132; padding: 12px; border-radius: 8px; border: 1px solid #badbcc; margin-bottom: 20px; text-align: center; font-family: sans-serif;">
-    <strong>🚀 FASE BETA PÚBLICA:</strong> Funcionalidades Premium (Auditoria de Risco, Timeline e Deep Match) liberadas gratuitamente.
-</div>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Edital.IA | Inovação", layout="wide", page_icon="🚀")
 
 st.markdown("""
     <style>
-    /* Estilos Visuais Gerais */
-    .tip-card { background-color: #fff3cd; color: #856404; border-left: 5px solid #ffc107; padding: 10px; margin-bottom: 5px; font-size: 14px; }
-    .doc-card { background-color: #e2e3e5; color: #383d41; border-radius: 5px; padding: 8px; margin-bottom: 5px; border-left: 5px solid #6c757d; font-size: 14px; }
-    .date-card { background-color: #cfe2ff; color: #084298; padding: 8px; border-radius: 5px; margin-bottom: 5px; border: 1px solid #b6d4fe; font-weight: bold; }
-    .money-card { background-color: #e6f9e6; color: #155724; padding: 15px; border-radius: 8px; border: 1px solid #c3e6cb; font-weight: bold; font-size: 16px; margin-bottom: 10px; }
-    .smart-doc-card { background-color: #f0f8ff; border-left: 5px solid #007bff; padding: 10px; margin-bottom: 8px; color: #004085; font-size: 14px; }
-    .risk-card { background-color: #fff5f5; border-left: 5px solid #dc3545; padding: 12px; margin-bottom: 8px; color: #842029; font-size: 14px; }
+    /* Cards de Instrução */
+    .instruction-box { background-color: #e3f2fd; padding: 15px; border-radius: 8px; border-left: 5px solid #2196f3; margin-bottom: 20px; color: #0d47a1; font-size: 14px; }
+    
+    /* Box Financeiro */
+    .finance-box { background-color: #f0fff4; border: 1px solid #c3e6cb; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+    .finance-title { color: #155724; font-weight: bold; font-size: 16px; margin-bottom: 5px; }
+    .finance-value { color: #28a745; font-weight: bold; font-size: 24px; }
+    
+    /* Dicas Estratégicas */
+    .tip-card { background-color: #fff3cd; color: #856404; border-left: 5px solid #ffc107; padding: 12px; margin-bottom: 8px; font-size: 14px; border-radius: 4px; }
+    
+    /* Box Especialista (WhatsApp) */
+    .expert-box { background-color: #ffffff; border: 2px solid #25D366; padding: 15px; border-radius: 10px; text-align: center; margin-top: 20px; margin-bottom: 20px; }
+    .expert-title { color: #25D366; font-weight: bold; font-size: 18px; margin-bottom: 5px; }
+    
+    /* Tags de Status */
+    .status-tag-open { background-color: #d4edda; color: #155724; padding: 5px 15px; border-radius: 20px; font-weight: bold; border: 1px solid #c3e6cb; }
+    .status-tag-closed { background-color: #f8d7da; color: #721c24; padding: 5px 15px; border-radius: 20px; font-weight: bold; border: 1px solid #f5c6cb; }
+    .match-tag-high { background-color: #cce5ff; color: #004085; padding: 5px 15px; border-radius: 20px; font-weight: bold; border: 1px solid #b8daff; }
+    .match-tag-low { background-color: #fff3cd; color: #856404; padding: 5px 15px; border-radius: 20px; font-weight: bold; border: 1px solid #ffeeba; }
+
+    /* Estilos Gerais */
+    .guide-box { background-color: #ffffff; border: 1px solid #dee2e6; padding: 20px; border-radius: 8px; margin-bottom: 15px; border-left: 5px solid #0d6efd; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .guide-title { color: #0d6efd; font-weight: bold; font-size: 16px; margin-bottom: 10px; text-transform: uppercase; }
+    .guide-suggestion { color: #333; font-size: 15px; margin-bottom: 8px; line-height: 1.5; }
+    .guide-source { font-size: 11px; color: #666; text-align: right; margin-top: 8px; border-top: 1px solid #eee; padding-top: 5px; font-style: italic;}
+    .guide-warning { background-color: #fff5f5; color: #c00; padding: 8px; border-radius: 4px; font-size: 12px; margin-top: 10px; border: 1px solid #ffcdd2; font-weight: bold; display: flex; align-items: center;}
+    
+    .block-header { background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; padding: 10px; font-weight: bold; font-size: 18px; color: #495057; margin-top: 20px; margin-bottom: 15px; }
+    .risk-card { background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 12px; margin-bottom: 8px; color: #856404; font-size: 14px; }
+    
+    /* Tags de Entidade */
+    .tag-pj { background-color: #f0f2f5; color: #1c1e21; border: 1px solid #ccd0d5; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; }
+    .tag-pf { background-color: #e3f2fd; color: #0d47a1; border: 1px solid #bbdefb; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; }
+    
+    /* 10 Perguntas */
+    .question-box { background-color: #ffffff; color: #000000; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .question-header { font-weight: bold; color: #007bff; margin-bottom: 5px; text-transform: uppercase; font-size: 12px; }
+    
+    /* Timeline */
     .timeline-box { position: relative; padding-left: 30px; border-left: 3px solid #007bff; margin-bottom: 20px; }
     .timeline-dot { position: absolute; left: -9px; top: 0; width: 15px; height: 15px; border-radius: 50%; background-color: #007bff; border: 2px solid #fff; }
     .timeline-date { font-size: 14px; font-weight: bold; color: #007bff; text-transform: uppercase; margin-bottom: 5px; }
     .timeline-content { background-color: #f8f9fa; color: #212529; padding: 10px; border-radius: 5px; font-size: 15px; border: 1px solid #dee2e6; }
-    .status-aprovado { background-color: #d1e7dd; color: #0f5132; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 18px; border: 1px solid #c3e6cb; }
-    .status-reprovado { background-color: #f8d7da; color: #842029; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 18px; border: 1px solid #f5c6cb; }
-    .forbidden-box { background-color: #ffe6e6; border: 2px solid #ff0000; border-radius: 8px; padding: 15px; color: #cc0000; margin-bottom: 15px; }
-    .forbidden-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; }
-    .question-box { background-color: #ffffff; color: #000000; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .question-header { font-weight: bold; color: #007bff; margin-bottom: 5px; text-transform: uppercase; font-size: 12px; }
-    
-    /* NOVAS TAGS INTELIGENTES */
-    .tag-expired { background-color: #ffe6e6; color: #cc0000; border: 1px solid #ff9999; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; margin-right: 8px; vertical-align: middle; }
-    .tag-open { background-color: #e6fffa; color: #006644; border: 1px solid #99f2d1; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; margin-right: 8px; vertical-align: middle; }
-    .tag-pj { background-color: #f0f2f5; color: #1c1e21; border: 1px solid #ccd0d5; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; margin-right: 8px; vertical-align: middle; }
-    .tag-match { background-color: #e6f3ff; color: #0052cc; border: 1px solid #b3d9ff; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; margin-right: 8px; vertical-align: middle; }
-
-    .feedback-container { border: 2px dashed #6c757d; padding: 20px; border-radius: 10px; text-align: center; background-color: #f8f9fa; margin-top: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. SISTEMA DE MEMÓRIA & RASTREAMENTO
+# 2. SISTEMA DE MEMÓRIA
 # ==============================================================================
 ARQUIVO_PERFIL = "meu_perfil.json"
 
 def carregar_perfil():
     if os.path.exists(ARQUIVO_PERFIL):
-        with open(ARQUIVO_PERFIL, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(ARQUIVO_PERFIL, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except: return {}
     return {}
 
 def salvar_perfil(dados):
@@ -92,50 +103,27 @@ def salvar_perfil(dados):
     with open(ARQUIVO_PERFIL, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=4)
 
-# --- CONEXÃO GOOGLE SHEETS ---
+# --- TRACKER ---
 def registrar_evento_analytics(projeto, setor, nome_edital, resultado, feedback_score):
-    """
-    Salva os dados na planilha 'Tracker_Edital_IA' se configurado.
-    """
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    mapa_feedback = {0: "😞 Horrível", 1: "🙁 Ruim", 2: "😐 Médio", 3: "🙂 Bom", 4: "🤩 Excelente"}
-    feedback_texto = mapa_feedback.get(feedback_score, "N/A")
-    
-    # 1. Log no Console (Backup)
-    msg_log = f"🔔 [TRACKER] {timestamp} | {projeto} | {setor} | {nome_edital} | {resultado} | {feedback_texto}"
-    print(msg_log)
-    
-    # 2. Log na Planilha (Se configurado)
-    if TEM_GSPREAD and "gcp_service_account" in st.secrets:
-        try:
-            # Autenticação usando os Secrets do Streamlit
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            creds_dict = dict(st.secrets["gcp_service_account"]) # Converte objeto TOML para dict
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-            client = gspread.authorize(creds)
-            
-            # Abre a planilha
-            sheet = client.open("Tracker_Edital_IA").sheet1
-            
-            # Adiciona a linha
-            sheet.append_row([timestamp, projeto, setor, nome_edital, resultado, feedback_texto])
-            print("✅ [TRACKER] Dados salvos no Google Sheets com sucesso!")
-            st.toast(f"✅ Feedback Salvo no Google Sheets!", icon="📊") # AVISO VISUAL NO APP
-            
-        except Exception as e:
-            print(f"⚠️ [TRACKER] Erro ao salvar no Sheets: {str(e)}")
-            st.toast(f"Erro ao salvar: {str(e)}", icon="⚠️")
-    else:
-        print("ℹ️ [TRACKER] Google Sheets não configurado ou gspread não instalado.")
-        st.toast("Planilha não conectada (veja o log).", icon="ℹ️")
+    if not TEM_GSPREAD or "gcp_service_account" not in st.secrets: return False
+    try:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        mapa_feedback = {0: "😞", 1: "🙁", 2: "😐", 3: "🙂", 4: "🤩"}
+        feedback_texto = mapa_feedback.get(feedback_score, "N/A")
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(st.secrets["gcp_service_account"]), scope)
+        client = gspread.authorize(creds)
+        sheet = client.open("Tracker_Edital_IA").sheet1
+        sheet.append_row([timestamp, projeto, setor, nome_edital, resultado, feedback_texto])
+        st.toast(f"✅ Feedback Recebido!", icon="📊")
+        return True
+    except: return False
 
-    return True
-
-# --- PDF HELPERS ---
+# --- PDF ---
 def limpar_texto_pdf(texto):
     if not texto: return ""
     if isinstance(texto, list): texto = "\n".join([f"- {str(item)}" for item in texto])
-    texto = str(texto)
+    texto = str(texto).replace("’", "'").replace("“", '"').replace("”", '"')
     return texto.encode('latin-1', 'replace').decode('latin-1')
 
 def gerar_relatorio_pdf(dados, user_data):
@@ -143,99 +131,80 @@ def gerar_relatorio_pdf(dados, user_data):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, limpar_texto_pdf(f"Relatório de Análise: {user_data['projeto']['nome']}"), ln=True, align='C')
+    pdf.cell(0, 10, limpar_texto_pdf(f"Relatório Técnico: {user_data['projeto']['nome']}"), ln=True, align='C')
     pdf.set_font("Arial", "I", 10)
-    pdf.cell(0, 10, f"Data da Análise: {datetime.date.today()}", ln=True, align='C')
+    pdf.cell(0, 10, f"Gerado em: {datetime.date.today()}", ln=True, align='C')
     pdf.ln(5)
 
     raio_x = dados.get("dados_do_edital", {})
     analise = dados.get("analise_compatibilidade", {})
-    elegibilidade = dados.get("elegibilidade_basica", {})
-    docs_analise = dados.get("analise_documental_extra", []) 
+    elig = dados.get("elegibilidade_basica", {})
     checklist = dados.get("plano_acao_cronograma", [])
     riscos = dados.get("radar_de_riscos", [])
+    guia = dados.get("guia_escrita", [])
+    perguntas = dados.get("perguntas_cruciais", [])
+    dicas = analise.get("dicas_estrategicas", [])
 
     pdf.set_font("Arial", "B", 14)
     res = analise.get('resultado', 'ANÁLISE')
-    if "APROVADO" in res.upper(): pdf.set_text_color(0, 128, 0)
-    else: pdf.set_text_color(200, 0, 0)
-    pdf.cell(0, 10, limpar_texto_pdf(f"RESULTADO: {res}"), ln=True)
+    pdf.cell(0, 10, limpar_texto_pdf(f"VEREDITO: {res}"), ln=True)
     
-    # --- DADOS DE ELEGIBILIDADE NO PDF ---
-    pdf.set_text_color(0,0,0); pdf.set_font("Arial", "B", 10)
-    prazo_status = elegibilidade.get('status_prazo', 'N/A')
-    prazo_data = elegibilidade.get('data_limite_inscricao', 'N/A')
-    pdf.cell(0, 6, limpar_texto_pdf(f"Prazo: {prazo_status} (Fim: {prazo_data})"), ln=True)
-    if elegibilidade.get('exige_cnpj'):
-        pdf.cell(0, 6, "Exige CNPJ: SIM", ln=True)
-    else:
-        pdf.cell(0, 6, "Exige CNPJ: NAO", ln=True)
-    pdf.ln(2)
-    # -------------------------------------
-
-    pdf.set_text_color(0, 0, 0) 
     pdf.set_font("Arial", "", 11)
-    pdf.multi_cell(0, 6, limpar_texto_pdf(f"Motivo Principal: {analise.get('motivo_principal', '')}"))
+    pdf.multi_cell(0, 6, limpar_texto_pdf(f"Parecer: {analise.get('motivo_principal', '')}"))
     pdf.ln(5)
 
     if riscos:
         pdf.set_text_color(139, 0, 0)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 8, limpar_texto_pdf("⚠️ PONTOS DE ATENÇÃO E RISCOS"), ln=True)
+        pdf.cell(0, 8, limpar_texto_pdf("⚠️ RISCOS IDENTIFICADOS"), ln=True)
         pdf.set_font("Arial", "", 10)
         for r in riscos: pdf.multi_cell(0, 5, limpar_texto_pdf(f"• {r}"))
         pdf.set_text_color(0, 0, 0); pdf.ln(5)
 
-    pdf.set_font("Arial", "B", 12); pdf.set_fill_color(240, 240, 240)
-    pdf.cell(0, 8, limpar_texto_pdf("1. FICHA TÉCNICA"), ln=True, fill=True); pdf.ln(2)
-    pdf.set_font("Arial", "B", 10); pdf.cell(0, 5, "Objetivo:", ln=True)
-    pdf.set_font("Arial", "", 10); pdf.multi_cell(0, 5, limpar_texto_pdf(raio_x.get('objetivo_resumido', 'N/A'))); pdf.ln(2)
-    pdf.set_font("Arial", "B", 10); pdf.cell(0, 5, "Valores:", ln=True)
-    pdf.set_font("Arial", "", 10); pdf.multi_cell(0, 5, limpar_texto_pdf(str(raio_x.get('valores_projeto', 'N/A')))); pdf.ln(3)
+    if dicas:
+        pdf.set_text_color(0, 0, 128)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 8, limpar_texto_pdf("💡 DICAS ESTRATÉGICAS"), ln=True)
+        pdf.set_font("Arial", "", 10)
+        for d in dicas: pdf.multi_cell(0, 5, limpar_texto_pdf(f"• {d}"))
+        pdf.set_text_color(0, 0, 0); pdf.ln(5)
 
+    # Roteiro
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 8, limpar_texto_pdf("2. ITENS VEDADOS"), ln=True, fill=True); pdf.ln(2)
-    pdf.set_text_color(180, 0, 0)
-    for p in raio_x.get('itens_proibidos', []): pdf.multi_cell(0, 5, limpar_texto_pdf(f"X {p}"))
-    pdf.set_text_color(0, 0, 0); pdf.ln(3)
-
-    if docs_analise:
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 8, limpar_texto_pdf("3. ANÁLISE DOS SEUS DOCUMENTOS"), ln=True, fill=True); pdf.ln(2)
+    pdf.cell(0, 8, limpar_texto_pdf("ROTEIRO DO PROJETO"), ln=True, fill=True); pdf.ln(2)
+    for passo in guia:
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 6, limpar_texto_pdf(f"• {passo.get('secao')}"), ln=True)
         pdf.set_font("Arial", "", 10)
-        for doc in docs_analise: pdf.multi_cell(0, 5, limpar_texto_pdf(f"• {doc}"))
-        pdf.ln(5)
-
-    if checklist:
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 8, limpar_texto_pdf("4. PLANO DE AÇÃO"), ln=True, fill=True); pdf.ln(2)
-        pdf.set_font("Arial", "", 10)
-        for item in checklist: pdf.cell(0, 6, limpar_texto_pdf(f"{item.get('data')}: {item.get('tarefa')}"), ln=True)
+        pdf.multi_cell(0, 5, limpar_texto_pdf(f"  {passo.get('analise_do_edital')}"))
+        pdf.ln(2)
 
     return pdf.output(dest="S").encode("latin-1", "replace")
 
 # ==============================================================================
 # 3. MOTOR DE IA
 # ==============================================================================
-def get_safety_settings():
-    return [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}]
-
 def chamar_ia_blindada(model, prompt):
-    try: return model.generate_content(prompt, safety_settings=get_safety_settings())
+    try:
+        return model.generate_content(prompt, safety_settings=[
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ])
     except Exception as e:
-        if "429" in str(e): st.error("🚨 Cota excedida (Erro 429)."); return None
         return None
 
 def limpar_json_cirurgico(texto_sujo):
-    if not texto_sujo: return {"erro": "Resposta vazia da IA"}
+    if not texto_sujo: return {"erro": "Sem resposta da IA."}
     try:
         texto_limpo = texto_sujo.replace("```json", "").replace("```", "").strip()
-        inicio = texto_limpo.find("{"); fim = texto_limpo.rfind("}")
-        if inicio != -1 and fim != -1: return json.loads(texto_limpo[inicio : fim + 1])
-        else: return {"erro": "Estrutura JSON não encontrada na resposta."}
-    except json.JSONDecodeError: return {"erro": "A IA gerou um JSON inválido. Tente novamente."}
-    except Exception as e: return {"erro": f"Erro inesperado: {str(e)}"}
+        inicio = texto_limpo.find("{")
+        fim = texto_limpo.rfind("}")
+        if inicio != -1 and fim != -1:
+            return json.loads(texto_limpo[inicio : fim + 1])
+        else: return {"erro": "JSON inválido."}
+    except Exception as e: return {"erro": f"Erro de Formatação: {str(e)}"}
 
 @st.cache_data 
 def ler_multiplos_pdfs(files):
@@ -249,320 +218,350 @@ def ler_multiplos_pdfs(files):
         except: pass
     return text, pages
 
-# --- FUNÇÃO 1: ANÁLISE CRUZADA INTELIGENTE ---
+# --- ANALISADOR DETALHADO ---
 def analisar_doc(texto_edital, texto_empresa, perfil, api_key):
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("models/gemini-2.5-flash")
+    if not api_key: return {"erro": "Insira a API Key na barra lateral!"}
     
-    # --- DATA DE HOJE PARA VERIFICAR PRAZOS ---
-    hoje_str = datetime.date.today().strftime("%d/%m/%Y")
-    
-    prompt = f"""
-    ATUE COMO: Auditor Sênior de Riscos em Editais Públicos.
-    HOJE É DIA: {hoje_str} (Use esta data para verificar rigorosamente se o edital está vencido).
-    
-    INSTRUÇÃO CRUCIAL SOBRE PRAZOS:
-    - Verifique se há 'Prorrogação', 'Retificação' ou 'Aditivo' no texto que altere a data final.
-    - Se a data limite for anterior a {hoje_str}, marque status_prazo como "ENCERRADO".
-    - Se a data limite for posterior ou igual a {hoje_str}, marque como "ABERTO".
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("models/gemini-2.5-flash", generation_config={"response_mime_type": "application/json"})
+        
+        hoje_str = datetime.date.today().strftime("%d/%m/%Y")
+        
+        prompt = f"""
+        ATUE COMO: Consultor Sênior em Captação de Recursos (Inovação).
+        HOJE É DIA: {hoje_str}.
+        
+        TAREFA:
+        1. PRAZOS: Verifique se está ABERTO/ENCERRADO.
+        2. CRONOGRAMA MACRO: Extraia datas de início, fim e resultados.
+        3. FINANCEIRO: Extraia tipo de recurso, valor máximo e rubricas (O que paga).
+        4. DOCUMENTAÇÃO (CRUCIAL): Separe PF e PJ.
+        5. PERGUNTAS DE OURO: 10 critérios de eliminação.
+        6. ROTEIRO DE ESCRITA: Com referências ("Item X.Y").
+        7. DICAS ESTRATÉGICAS: 3 sugestões para aumentar a nota neste edital.
+        8. CRUZAMENTO: Valide PF/PJ e TRL com os documentos da empresa.
 
-    CONTEXTO:
-    1. PERFIL: {json.dumps(perfil, indent=2, ensure_ascii=False)}
-    2. DOCS EMPRESA: {texto_empresa[:200000]} 
-    3. EDITAL: {texto_edital[:700000]}
-    
-    SAÍDA JSON OBRIGATÓRIA:
-    {{
-        "elegibilidade_basica": {{
-            "data_limite_inscricao": "DD/MM/AAAA",
-            "status_prazo": "ABERTO" ou "ENCERRADO",
-            "publico_alvo": "PESSOA JURIDICA" ou "PESSOA FISICA" ou "AMBOS",
-            "exige_cnpj": true/false
-        }},
-        "dados_do_edital": {{
-            "objetivo_resumido": "Texto curto.",
-            "cronograma_chaves": ["Data 1", "Data 2"],
-            "fases_selecao": ["Fase 1", "Fase 2"],
-            "lista_documentacao": ["Doc 1", "Doc 2"],
-            "itens_financiaveis": ["Pode A", "Pode B"],
-            "itens_proibidos": ["Proibido A", "Proibido B", "Proibido C"],
-            "valores_projeto": "R$ Min e Max"
-        }},
-        "plano_acao_cronograma": [{{"data": "DD/MM", "tarefa": "Ação prática...", "status": "Pendente"}}],
-        "perguntas_cruciais": ["1. ...", "2. ...", "3. ...", "4. ...", "5. ...", "6. ...", "7. ...", "8. ...", "9. ...", "10. ..."],
-        "analise_compatibilidade": {{
-            "resultado": "APROVADO" ou "REPROVADO" ou "ATENÇÃO",
-            "motivo_principal": "Resumo executivo.",
-            "dicas_estrategicas": ["Dica 1", "Dica 2"],
-            "alerta_cnae": "Análise CNAE ou N/A",
-            "alerta_tempo": "Análise Tempo ou N/A"
-        }},
-        "radar_de_riscos": ["⚠️ RISCO 1...", "⚠️ RISCO 2..."],
-        "analise_documental_extra": ["Análise Pitch...", "Análise CNPJ..."]
-    }}
-    """
-    res = chamar_ia_blindada(model, prompt)
-    if not res: return {"erro": "Falha IA"}
-    return limpar_json_cirurgico(res.text)
+        CONTEXTO:
+        PERFIL: {json.dumps(perfil, indent=2, ensure_ascii=False)}
+        DOCS EMPRESA: {texto_empresa[:20000]}
+        EDITAL: {texto_edital[:700000]}
+        
+        SAÍDA JSON:
+        {{
+            "elegibilidade_basica": {{
+                "data_limite_inscricao": "DD/MM/AAAA",
+                "status_prazo": "ABERTO" ou "ENCERRADO",
+                "publico_alvo": "Texto...",
+                "exige_cnpj": true/false,
+                "motivo_inelegibilidade": "Texto se houver"
+            }},
+            "analise_fomento": {{
+                "tipo_recurso": "Subvenção/Reembolsável",
+                "valor_maximo_projeto": "R$ Teto",
+                "contrapartida_exigida": "Texto",
+                "itens_financiáveis_detalhado": ["Item 1", "Item 2"],
+                "itens_proibidos_resumo": ["Proibido A"]
+            }},
+            "dados_do_edital": {{
+                "objetivo_resumido": "Texto...",
+                "cronograma_macro": {{
+                    "inicio_inscricoes": "Data",
+                    "fim_inscricoes": "Data",
+                    "resultado_preliminar": "Data",
+                    "resultado_final": "Data"
+                }}
+            }},
+            "documentacao_exigida": {{
+                "pf_inscricao": ["Doc A", "Doc B"],
+                "pf_se_aprovado": ["Abrir CNPJ", "Contrato Social"],
+                "pj_ja_constituida": ["CNPJ", "CNDs"]
+            }},
+            "plano_acao_cronograma": [{{"data": "DD/MM", "tarefa": "Ação...", "status": "Pendente"}}],
+            "perguntas_cruciais": ["1. Pergunta...", "2. ...", "3. ...", "4. ...", "5. ...", "6. ...", "7. ...", "8. ...", "9. ...", "10. ..."],
+            "analise_compatibilidade": {{
+                "resultado": "ALTA ADERÊNCIA" ou "MÉDIA" ou "INELEGÍVEL",
+                "motivo_principal": "Texto...",
+                "dicas_estrategicas": ["Dica 1", "Dica 2", "Dica 3"],
+                "alerta_cnae": "Alerta ou N/A",
+                "match_trl_status": "COMPATÍVEL/INCOMPATÍVEL",
+                "match_trl_explicacao": "Explicação..."
+            }},
+            "radar_de_riscos": ["Risco 1", "Risco 2"],
+            "guia_escrita": [
+                {{
+                    "secao": "Problema",
+                    "analise_do_edital": "Instrução...",
+                    "exemplo_aplicado": "Exemplo...",
+                    "citacao_edital": "Item X.Y"
+                }},
+                {{
+                    "secao": "Metodologia",
+                    "analise_do_edital": "Instrução...",
+                    "exemplo_aplicado": "Exemplo...",
+                    "citacao_edital": "Item W.Z"
+                }},
+                 {{
+                    "secao": "Orçamento",
+                    "analise_do_edital": "Instrução...",
+                    "exemplo_aplicado": "N/A",
+                    "citacao_edital": "Item A.B"
+                }}
+            ]
+        }}
+        """
+        res = chamar_ia_blindada(model, prompt)
+        if not res: return {"erro": "Erro de conexão API."}
+        return limpar_json_cirurgico(res.text)
+    except Exception as e:
+        return {"erro": f"Erro crítico: {str(e)}"}
 
 # ==============================================================================
 # 4. FRONT-END
 # ==============================================================================
 perfil = carregar_perfil()
+
+# --- SIDEBAR: CONTROLE GERAL ---
 st.sidebar.title("🚀 Edital.IA")
+st.sidebar.caption("Sua API Key e o Edital ficam aqui.")
 
 try:
     if "GOOGLE_API_KEY" in st.secrets: api_key = st.secrets["GOOGLE_API_KEY"]
     else: api_key = st.sidebar.text_input("🔑 API Key", value=perfil.get('api_key', ''), type="password")
 except: api_key = st.sidebar.text_input("🔑 API Key", value=perfil.get('api_key', ''), type="password")
 
-st.sidebar.header("1. Documentos da Empresa")
-st.sidebar.caption("Suba Pitch, CNPJ ou Projetos para auditoria cruzada.")
-arquivos_empresa = st.sidebar.file_uploader("📂 Seus Documentos (PDF)", accept_multiple_files=True, key="docs_empresa")
-
 st.sidebar.markdown("---")
-st.sidebar.header("2. Perfil Declarado")
-tipo_perfil = st.sidebar.radio("Entidade:", ["Pessoa Física (CPF)", "Empresa (CNPJ)"], index=0 if perfil.get('tipo_entidade') == "Pessoa Física (CPF)" else 1)
+st.sidebar.subheader("📄 O EDITAL (Regras)")
+uploaded_files = st.sidebar.file_uploader("Suba o PDF do Edital", accept_multiple_files=True)
 
-with st.sidebar.form("form_cadastro"):
-    natureza = "N/A"; data_ref = None; faixa_fat = "Não faturou"
-    if tipo_perfil == "Empresa (CNPJ)":
-        opcoes_fat = ["Até R$ 81k (MEI)", "Até R$ 360k (ME)", "Até R$ 4.8M (EPP)", "Acima de R$ 4.8M"]
-        idx_fat = 0
-        if perfil.get('faixa_faturamento') in opcoes_fat: idx_fat = opcoes_fat.index(perfil.get('faixa_faturamento'))
-        faixa_fat = st.selectbox("Faturamento", options=opcoes_fat, index=idx_fat)
-        opcoes_natureza = ["MEI", "Sociedade Limitada (LTDA)", "Sociedade Anônima (S.A.)", "Sociedade Unipessoal (SLU)", "Inova Simples (I.S.)", "Cooperativa", "Associação/OSC", "Consórcio", "Outros"]
-        idx_nat = 0
-        nat_salva = perfil.get('natureza_juridica', 'MEI')
-        if nat_salva in opcoes_natureza: idx_nat = opcoes_natureza.index(nat_salva)
-        natureza = st.selectbox("Natureza", options=opcoes_natureza, index=idx_nat)
-        d_padrao = datetime.date.today()
-        if perfil.get('data_referencia'):
-            try: d_padrao = datetime.datetime.strptime(perfil.get('data_referencia'), '%Y-%m-%d').date()
-            except: pass
-        data_ref = st.date_input("Abertura CNPJ", value=d_padrao)
-    else: st.caption("Modo PF Ativado")
-    
+# --- ÁREA PRINCIPAL ---
+st.title("Painel de Captação")
+
+# --- GUIA RÁPIDO ---
+with st.expander("📘 **COMO USAR**", expanded=False):
+    st.markdown("""
+    1. **Preencha seus dados na Aba 1:** A IA precisa saber quem você é.
+    2. **(Opcional) Suba documentos na Aba 1:** Pitch ou Plano de Negócios ajudam muito.
+    3. **Suba o Edital na Esquerda:** O arquivo com as regras.
+    4. **Vá na Aba 2 (Raio-X):** Clique em 'Analisar' para ver o veredito.
+    5. **Siga as Abas 3, 4 e 5:** Para validar e escrever o projeto.
+    """)
+
+# --- ABAS ---
+tab_perfil, tab_analise, tab_questions, tab_crono, tab_gps = st.tabs(["🏗️ Meu Projeto", "📊 Raio-X & Deep Match", "❓ 10 Perguntas", "📍 Timeline", "📝 Roteiro (GPS)"])
+
+# --- ABA 1: MEU PROJETO ---
+with tab_perfil:
+    st.markdown("""
+    <div class="instruction-box">
+        <strong>📝 INSTRUÇÕES DE PREENCHIMENTO:</strong><br>
+        1. <strong>Pitch:</strong> Descreva o problema e a solução. A IA cruza isso com o "Objeto do Edital".<br>
+        2. <strong>Pessoa Física:</strong> Se selecionar esta opção, o faturamento será zerado automaticamente.<br>
+        3. <strong>Documentos da Empresa:</strong> Suba seu Pitch Deck ou CNPJ abaixo para uma análise mais profunda.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("##### 📂 Seus Documentos (Opcional)")
+    arquivos_empresa = st.file_uploader("Arraste seu Pitch, CNPJ ou Plano de Negócios (PDF)", accept_multiple_files=True, key="upload_empresa")
+    if arquivos_empresa: st.success(f"✅ {len(arquivos_empresa)} documento(s) pronto(s) para análise cruzada.")
+
     st.markdown("---")
-    st.header("Projeto")
-    nome_projeto = st.text_input("Nome", value=perfil.get('nome_projeto', 'Minha Startup'))
-    resumo_projeto = st.text_area("Pitch (Texto)", value=perfil.get('resumo_projeto', ''), height=100)
-    opcoes_setor = ["Agritech", "Saúde/Healthtech", "Educação/Edtech", "Logística", "Varejo", "TI/SaaS", "Bioeconomia", "Fintech", "Indústria 4.0", "Social/Impacto", "Outros"]
-    idx_setor = 5
-    if perfil.get('setor') in opcoes_setor: idx_setor = opcoes_setor.index(perfil.get('setor'))
-    setor = st.selectbox("Setor", opcoes_setor, index=idx_setor)
-    lista_tags = ["Inteligência Artificial (IA)", "Machine Learning", "SaaS", "Marketplace", "IoT (Internet das Coisas)", "Blockchain", "Big Data & Analytics", "Realidade Virtual/Aumentada (VR/AR)", "Biotech", "Nanotecnologia", "Robótica/Drones", "Cleantech/Energia", "Fintech", "Healthtech", "Agrotech", "Edtech", "Cybersecurity", "Cloud Computing", "API/Integrações", "Mobile App", "Hardware", "Indústria 4.0", "ESG", "Social Tech"]
-    tags_salvas = [t for t in perfil.get('tags', []) if t in lista_tags]
-    tags_sel = st.multiselect("Tecnologias Envolvidas:", lista_tags, default=tags_salvas)
-    trl_num = st.slider("TRL (Maturidade):", 1, 9, value=perfil.get('trl', 1))
-    equipe = st.number_input("Equipe", min_value=1, value=int(perfil.get('tamanho_equipe', 1)))
-    cidade = st.text_input("Cidade", value=perfil.get('localizacao', 'Tucuruí - PA'))
-    st.header("Histórico")
-    ja_recebeu = st.checkbox("Já recebi fomento?", value=perfil.get('ja_recebeu', False))
-    detalhe_fomento = st.text_input("Qual?", value=perfil.get('detalhe_fomento', ''))
-    c1, c2 = st.columns(2)
-    with c1: mulher = st.checkbox("Lid. Fem.", value=perfil.get('mulher', False))
-    with c2: doutor = st.checkbox("Doutores", value=perfil.get('doutor', False))
-    btn_salvar = st.form_submit_button("💾 Salvar Perfil")
-
-if btn_salvar:
-    dados_salvar = { "api_key": api_key, "nome_projeto": nome_projeto, "resumo_projeto": resumo_projeto, "tipo_entidade": tipo_perfil, "natureza_juridica": natureza, "faixa_faturamento": faixa_fat, "localizacao": cidade, "tamanho_equipe": equipe, "setor": setor, "tags": tags_sel, "trl": trl_num, "ja_recebeu": ja_recebeu, "detalhe_fomento": detalhe_fomento, "mulher": mulher, "doutor": doutor }
-    if data_ref: dados_salvar["data_referencia"] = str(data_ref)
-    salvar_perfil(dados_salvar)
-    st.success("Salvo!")
-
-# ==============================================================================
-# 5. ÁREA PRINCIPAL
-# ==============================================================================
-st.title(f"Painel: {nome_projeto}")
-
-tab_ia, tab_questions, tab_checklist = st.tabs(["📊 Raio-X & Deep Match", "❓ 10 Perguntas Cruciais", "📍 Timeline de Ação"])
-
-with tab_ia:
-    files_edital = st.file_uploader("1. Suba o EDITAL (PDF)", accept_multiple_files=True, key="pdf_edital")
-    if 'resultado_analise' not in st.session_state: st.session_state['resultado_analise'] = None
-
-    if st.session_state['resultado_analise']:
-        if st.button("🔄 Nova Análise"):
-            st.session_state['resultado_analise'] = None
-            st.rerun()
-
-    if files_edital and api_key:
-        if st.session_state['resultado_analise'] is None:
-            if st.button("🔍 Extrair Dados e Analisar (Deep Match)"):
-                tem_doc_empresa = arquivos_empresa is not None and len(arquivos_empresa) > 0
-                tem_pitch_texto = len(resumo_projeto) > 10
-                if not tem_pitch_texto and not tem_doc_empresa:
-                    st.error("Por favor, preencha o Pitch (texto) OU suba um documento da empresa (PDF) na barra lateral!")
-                else:
-                    with st.spinner("Lendo Edital e Procurando Pegadinhas..."):
-                        nome_do_arquivo_edital = files_edital[0].name if files_edital else "Desconhecido"
-                        texto_edital, pags_edital = ler_multiplos_pdfs(files_edital)
-                        texto_empresa = "Nenhum documento da empresa anexado. Usar apenas perfil declarado."
-                        if tem_doc_empresa:
-                            texto_empresa, pags_empresa = ler_multiplos_pdfs(arquivos_empresa)
-                            st.toast(f"Lidos {pags_empresa} páginas de documentos da empresa.")
-                        
-                        user_data_struct = { "projeto": {"nome": nome_projeto, "resumo": resumo_projeto, "setor": setor}, "tecnico": {"equipe": equipe, "trl": trl_num, "tags": tags_sel}, "juridico": {"tipo": tipo_perfil, "natureza": natureza, "data_abertura": str(data_ref) if data_ref else "N/A", "local": cidade}, "financeiro": {"faixa": faixa_fat}, "historico": {"status": "Já recebeu" if ja_recebeu else "Não", "detalhes": detalhe_fomento}, "bonus": {"mulheres": mulher, "doutores": doutor} }
-                        
-                        dados = analisar_doc(texto_edital, texto_empresa, user_data_struct, api_key)
-                        if "erro" in dados: st.error(f"Erro na análise: {dados['erro']}")
-                        else:
-                            st.session_state['dados_analise'] = dados
-                            st.session_state['resultado_analise'] = "PRONTO"
-                            st.session_state['user_data_cache'] = user_data_struct
-                            st.session_state['nome_edital_atual'] = nome_do_arquivo_edital
-                            st.rerun()
-
-        elif st.session_state['resultado_analise'] == "PRONTO":
-            dados_brutos = st.session_state['dados_analise']
-            raio_x = dados_brutos.get("dados_do_edital", {})
-            analise = dados_brutos.get("analise_compatibilidade", {})
-            docs_extra = dados_brutos.get("analise_documental_extra", [])
-            riscos = dados_brutos.get("radar_de_riscos", [])
-            
-            # --- NOVAS VERIFICAÇÕES (V19.19) ---
-            elegibilidade = dados_brutos.get("elegibilidade_basica", {})
-            status_prazo = elegibilidade.get("status_prazo", "ABERTO")
-            data_limite = elegibilidade.get("data_limite_inscricao", "N/A")
-            exige_cnpj = elegibilidade.get("exige_cnpj", False)
-            
-            st.subheader("⚖️ Veredito IA (Auditoria)")
-
-            # --- RENDERIZAÇÃO DAS SMART TAGS ---
-            cols_tags = st.columns([1, 1, 1, 3])
-            
-            # 1. TAG DE PRAZO
-            with cols_tags[0]:
-                if status_prazo == "ENCERRADO":
-                    st.markdown(f'<div class="tag-expired">📅 ENCERRADO ({data_limite})</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="tag-open">📅 PRAZO ABERTO ({data_limite})</div>', unsafe_allow_html=True)
-            
-            # 2. TAG DE PJ
-            with cols_tags[1]:
-                if exige_cnpj:
-                    # Verifica se o usuário é PF
-                    tipo_usuario = st.session_state['user_data_cache']['juridico']['tipo']
-                    if "Pessoa Física" in tipo_usuario:
-                        st.markdown(f'<div class="tag-expired">🏢 EXCLUSIVO PJ (Você é PF)</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<div class="tag-pj">🏢 EXIGE CNPJ</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="tag-open">👤 ACEITA PF/PJ</div>', unsafe_allow_html=True)
-
-            # 3. TAG MATCH
-            with cols_tags[2]:
-                res = analise.get('resultado', 'ANÁLISE')
-                if "APROVADO" in res.upper(): st.markdown(f'<div class="tag-match">✅ ALTO MATCH</div>', unsafe_allow_html=True)
-                elif "ATENÇÃO" in res.upper(): st.markdown(f'<div class="tag-pj">⚠️ ATENÇÃO</div>', unsafe_allow_html=True)
-                else: st.markdown(f'<div class="tag-expired">🚫 BAIXO MATCH</div>', unsafe_allow_html=True)
-            
-            # --- FIM DAS TAGS ---
-
-            st.write("")
-            st.write(f"**Parecer:** {analise.get('motivo_principal', '')}")
-            
-            if riscos:
-                st.markdown("---"); st.subheader("⚠️ Radar de Riscos & Pegadinhas")
-                with st.expander("Ver Riscos Detectados (Importante)", expanded=True):
-                    for r in riscos: st.markdown(f'<div class="risk-card">{r}</div>', unsafe_allow_html=True)
-
-            if docs_extra:
-                st.markdown("---"); st.subheader("📂 Análise dos Seus Documentos (Anexos)")
-                st.caption("A IA analisou individualmente o conteúdo dos arquivos que você subiu:")
-                for doc_analise in docs_extra: st.markdown(f'<div class="smart-doc-card">{doc_analise}</div>', unsafe_allow_html=True)
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                if analise.get('alerta_cnae') and analise.get('alerta_cnae') != "N/A": st.info(f"🏢 **CNAE/Jurídico:** {analise.get('alerta_cnae')}")
-            with c2:
-                if analise.get('alerta_tempo') and analise.get('alerta_tempo') != "N/A": st.info(f"⏳ **Tempo/Maturidade:** {analise.get('alerta_tempo')}")
-
-            st.markdown("---")
-            col_msg, col_btn = st.columns([3, 1])
-            with col_msg: st.markdown("##### 🆘 Precisa de ajuda com a burocracia?"); st.caption("Fale diretamente com nosso especialista para tirar dúvidas ou submeter este projeto.")
-            with col_btn:
-                link_wa = "https://wa.me/556294847289?text=Olá!%20Estou%20no%20Edital.IA%20e%20preciso%20de%20ajuda%20com%20um%20projeto."
-                st.link_button("💬 Chamar no Zap", link_wa, use_container_width=True)
-            st.markdown("---")
-
-            st.subheader("📂 Raio-X do Edital")
-            st.info(f"🎯 **Objetivo:** {raio_x.get('objetivo_resumido', 'Não identificado')}")
-            st.markdown('<div class="forbidden-box"><div class="forbidden-title">🚫 O QUE ESTE EDITAL NÃO PAGA (ITENS VEDADOS)</div>', unsafe_allow_html=True)
-            for p in raio_x.get('itens_proibidos', []): st.markdown(f"• {p}")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            col_fin, col_val = st.columns(2)
-            with col_fin:
-                st.success("✅ **Financiável (Exemplos):**")
-                for p in raio_x.get('itens_financiaveis', []): st.write(f"• {p}")
-            with col_val:
-                st.markdown("##### 💰 Valor do Projeto")
-                val_proj = raio_x.get('valores_projeto', 'N/A')
-                st.markdown(f'<div class="money-card">{val_proj}</div>', unsafe_allow_html=True)
-
-            st.markdown("---")
-            col_docs, col_crono = st.columns(2)
-            with col_docs:
-                st.markdown("##### 📄 Documentos Exigidos")
-                for d in raio_x.get('lista_documentacao', []): st.markdown(f'<div class="doc-card">📎 {d}</div>', unsafe_allow_html=True)
-            with col_crono:
-                st.markdown("##### 📅 Cronograma")
-                for d in raio_x.get('cronograma_chaves', []): st.markdown(f'<div class="date-card">🗓️ {d}</div>', unsafe_allow_html=True)
-
-            st.markdown("##### 💡 Dicas Estratégicas")
-            for d in analise.get('dicas_estrategicas', []): st.markdown(f'<div class="tip-card">💡 {d}</div>', unsafe_allow_html=True)
-            
-            st.markdown("---")
-            st.markdown("<div class='feedback-container'>", unsafe_allow_html=True)
-            st.markdown("### 📥 Baixar Relatório Completo")
-            
-            feedback = st.feedback("faces")
-            
-            if feedback is not None:
-                registrar_evento_analytics(
-                    projeto=st.session_state['user_data_cache']['projeto']['nome'],
-                    setor=st.session_state['user_data_cache']['projeto']['setor'],
-                    nome_edital=st.session_state.get('nome_edital_atual', 'Desconhecido'),
-                    resultado=analise.get('resultado', 'N/A'),
-                    feedback_score=feedback
-                )
-                
-                st.success("Obrigado pelo feedback! Download liberado abaixo:")
-                if TEM_PDF:
-                    pdf_bytes = gerar_relatorio_pdf(dados_brutos, st.session_state['user_data_cache'])
-                    st.download_button("📄 CLIQUE AQUI PARA BAIXAR O PDF", data=pdf_bytes, file_name="relatorio_completo.pdf", mime="application/pdf", type="primary")
+    st.markdown("##### 🎯 Defina seu Perfil")
+    
+    btn_save = False
+    with st.form("form_cadastro_full"):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            nome_projeto = st.text_input("Nome do Projeto", value=perfil.get('nome_projeto', 'Minha Startup'))
+            tipo_perfil = st.radio("Entidade Jurídica", ["Pessoa Física (CPF)", "Empresa (CNPJ)"], index=1 if perfil.get('tipo_entidade') == "Empresa (CNPJ)" else 0)
+            setor = st.selectbox("Setor Principal", ["Bioeconomia", "Agritech", "Healthtech", "Edtech", "SaaS/TI", "Indústria", "Outros"], index=0)
+            modelo = st.selectbox("Modelo de Negócio", ["B2B", "B2C", "SaaS", "Hardware", "Serviços", "Marketplace"], index=0)
+        with col_b:
+            trl_num = st.slider("TRL (Maturidade 1-9)", 1, 9, value=perfil.get('trl', 1), help="1=Ideia, 9=Escala")
+            equipe = st.number_input("Tamanho da Equipe", min_value=1, value=int(perfil.get('tamanho_equipe', 1)))
+            ip = st.selectbox("Propriedade Intelectual", ["Sem IP", "Patente Depositada", "Patente Concedida", "Software Registrado"], index=0)
+            if tipo_perfil == "Pessoa Física (CPF)":
+                faturamento = "Zero/Pré-operacional"
+                st.info("ℹ️ Pessoa Física: Faturamento definido como Zero.")
             else:
-                st.caption("🔒 Avalie com um emoji acima para liberar o download do PDF.")
-            
-            st.markdown("</div>", unsafe_allow_html=True)
+                faturamento = st.selectbox("Faturamento Anual", ["Zero/Pré-operacional", "Até R$ 360k", "Até R$ 4.8M", "+ R$ 4.8M"], index=0)
 
+        pitch = st.text_area("Pitch (Obrigatório)", value=perfil.get('resumo_projeto', ''), height=100, help="Descreva o problema, solução e tecnologia.")
+        c3, c4 = st.columns(2)
+        with c3: mulher = st.checkbox("Liderança Feminina?", value=perfil.get('mulher', False))
+        with c4: doutor = st.checkbox("Possui Doutores?", value=perfil.get('doutor', False))
+        
+        st.markdown("---")
+        st.markdown("""<div class="legal-box"><strong>⚠️ AVISO DE RESPONSABILIDADE (VERSÃO BETA)</strong><br>O Edital.IA é uma ferramenta de apoio. A responsabilidade pelo envio, prazos e conteúdo é 100% do proponente.</div>""", unsafe_allow_html=True)
+        aceite_termos = st.checkbox("Declaro que li e concordo com o aviso acima.")
+        btn_save = st.form_submit_button("💾 Salvar Perfil")
+    
+    if btn_save:
+        if not aceite_termos: st.error("🛑 Você precisa aceitar os termos de responsabilidade para continuar.")
+        else:
+            d = {"api_key": api_key, "nome_projeto": nome_projeto, "resumo_projeto": pitch, "tipo_entidade": tipo_perfil, "trl": trl_num, "tamanho_equipe": equipe, "setor": setor, "modelo_negocio": modelo, "propriedade_intelectual": ip, "mulher": mulher, "doutor": doutor, "tecnico": {"trl": trl_num}, "faixa_faturamento": faturamento}
+            salvar_perfil(d)
+            st.success("✅ Perfil Salvo! Agora vá para a aba 'Raio-X'.")
+
+# --- ABA 2: ANÁLISE ---
+with tab_analise:
+    st.markdown("### 📊 Raio-X & Deep Match")
+    if 'resultado' not in st.session_state: st.session_state['resultado'] = None
+
+    if st.session_state['resultado']:
+        if st.button("🔄 Nova Análise"): st.session_state['resultado'] = None; st.rerun()
+    
+    if uploaded_files and api_key and st.session_state['resultado'] is None:
+        if st.button("🔍 Iniciar Análise Cruzada"):
+            if len(pitch) < 5: st.error("⚠️ Volte na aba 'Meu Projeto' e preencha o Pitch!")
+            else:
+                with st.spinner("Lendo edital e cruzando com seus documentos..."):
+                    texto_edital, pags = ler_multiplos_pdfs(uploaded_files)
+                    texto_empresa_extra = ""
+                    if arquivos_empresa:
+                        texto_empresa_extra, p_emp = ler_multiplos_pdfs(arquivos_empresa)
+                        st.toast(f"Analisando {p_emp} páginas da sua empresa...")
+                    user_data = {"projeto": {"nome": nome_projeto, "resumo": pitch, "setor": setor}, "tecnico": {"trl": trl_num, "equipe": equipe, "ip": ip}, "juridico": {"tipo": tipo_perfil, "faturamento": faturamento}, "bonus": {"mulher": mulher, "doutor": doutor}}
+                    analise = analisar_doc(texto_edital, texto_empresa_extra, user_data, api_key)
+                    if "erro" in analise: st.error(f"Erro: {analise['erro']}")
+                    else:
+                        st.session_state['resultado'] = analise
+                        st.session_state['user_data'] = user_data
+                        st.rerun()
+
+    if st.session_state['resultado']:
+        dados = st.session_state['resultado']
+        comp = dados.get('analise_compatibilidade', {})
+        elig = dados.get('elegibilidade_basica', {})
+        fin = dados.get('analise_fomento', {})
+        riscos = dados.get('radar_de_riscos', [])
+        raio_x = dados.get('dados_do_edital', {})
+        docs = dados.get('documentacao_exigida', {})
+        dicas = comp.get('dicas_estrategicas', [])
+
+        # Tags de Status
+        cols_tags = st.columns([1, 1, 3])
+        with cols_tags[0]:
+            if elig.get('status_prazo') == "ENCERRADO": st.markdown('<div class="status-tag-closed">📅 ENCERRADO</div>', unsafe_allow_html=True)
+            else: st.markdown('<div class="status-tag-open">🟢 ABERTO</div>', unsafe_allow_html=True)
+        with cols_tags[1]:
+            res = comp.get('resultado', 'ANÁLISE')
+            if "ALTA" in res.upper(): st.markdown('<div class="match-tag-high">🚀 ALTO MATCH</div>', unsafe_allow_html=True)
+            else: st.markdown('<div class="match-tag-low">⚠️ BAIXO MATCH</div>', unsafe_allow_html=True)
+        
+        st.write("")
+        st.write(f"**Parecer:** {comp.get('motivo_principal')}")
+
+        # FINANCEIRO
+        st.markdown('<div class="block-header">1. DINHEIRO & RECURSOS</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="finance-box">
+            <div class="finance-title">TIPO: {fin.get('tipo_recurso', 'N/A')}</div>
+            <div class="finance-value">💰 TETO: {fin.get('valor_maximo_projeto', 'N/A')}</div>
+            <br>
+            <strong>💸 Contrapartida:</strong> {fin.get('contrapartida_exigida', 'N/A')}<br>
+            <hr>
+            <strong>✅ O QUE PODE COMPRAR:</strong><br>
+            {', '.join(fin.get('itens_financiáveis_detalhado', ['Verificar Edital']))}
+        </div>
+        """, unsafe_allow_html=True)
+
+        if fin.get('itens_proibidos_resumo'):
+            st.markdown(f"**🚫 Proibido:** {', '.join(fin.get('itens_proibidos_resumo'))}")
+
+        # CRONOGRAMA & DOCUMENTOS
+        st.markdown('<div class="block-header">2. PRAZOS & DOCUMENTOS</div>', unsafe_allow_html=True)
+        c_dates, c_docs = st.columns(2)
+        with c_dates:
+            st.markdown("##### 📅 Datas Chave")
+            crono = raio_x.get('cronograma_macro', {})
+            st.write(f"**Início:** {crono.get('inicio_inscricoes', 'N/A')}")
+            st.write(f"**Fim:** {crono.get('fim_inscricoes', 'N/A')}")
+            st.write(f"**Resultado:** {crono.get('resultado_final', 'N/A')}")
+        with c_docs:
+            st.markdown("##### 📄 Documentação Exigida")
+            tab_pf, tab_pj = st.tabs(["👤 Pessoa Física", "🏢 Pessoa Jurídica"])
+            with tab_pf:
+                st.caption("**Para Inscrição:**")
+                for d in docs.get('pf_inscricao', []): st.markdown(f"- {d}")
+                st.caption("**Se Aprovado (Constituição):**")
+                for d in docs.get('pf_se_aprovado', []): st.markdown(f"- {d}")
+            with tab_pj:
+                st.caption("**Empresa Já Constituída:**")
+                for d in docs.get('pj_ja_constituida', []): st.markdown(f"- {d}")
+
+        # TRL & RISCOS
+        st.markdown('<div class="block-header">3. ANÁLISE TÉCNICA & RISCOS</div>', unsafe_allow_html=True)
+        if "INCOMPATÍVEL" in comp.get('match_trl_status', '').upper():
+            st.markdown(f'<div class="trl-mismatch">🚫 ALERTA TRL: {comp.get("match_trl_explicacao")}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="trl-match">✅ TRL OK: {comp.get("match_trl_explicacao")}</div>', unsafe_allow_html=True)
+
+        for r in riscos: st.markdown(f'<div class="risk-card">{r}</div>', unsafe_allow_html=True)
+
+        # DICAS ESTRATÉGICAS (NOVO)
+        if dicas:
+            st.markdown('<div class="block-header">4. DICAS ESTRATÉGICAS (PULO DO GATO)</div>', unsafe_allow_html=True)
+            for d in dicas: st.markdown(f'<div class="tip-card">💡 {d}</div>', unsafe_allow_html=True)
+
+        # WHATSAPP CTA (NOVO)
+        st.markdown("---")
+        st.markdown("""
+        <div class="expert-box">
+            <div class="expert-title">Precisa de ajuda profissional para aprovar?</div>
+            <p>Nossa consultoria especializada pode revisar seu projeto.</p>
+            <a href="https://wa.me/556294847289?text=Olá!%20Fiz%20a%20análise%20no%20Edital.IA%20e%20quero%20ajuda." target="_blank">
+                <button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">💬 FALAR COM ESPECIALISTA AGORA</button>
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("### 📥 Baixar Relatório (PDF)")
+        fb = st.feedback("faces")
+        if fb is not None:
+            registrar_evento_analytics(nome_projeto, setor, "Edital", res_txt, fb)
+            if TEM_PDF:
+                pdf_data = gerar_relatorio_pdf(dados, st.session_state['user_data'])
+                st.download_button("📄 BAIXAR AGORA", data=pdf_data, file_name="analise.pdf", mime="application/pdf", type="primary")
+
+# --- ABA 3: PERGUNTAS DE OURO ---
 with tab_questions:
-    st.markdown("### ❓ 10 Perguntas de Ouro")
-    if st.session_state.get('resultado_analise') == "PRONTO":
-        dados = st.session_state.get('dados_analise', {})
-        perguntas = dados.get('perguntas_cruciais', [])
-        with st.container():
-            score_checks = 0
-            for i, p in enumerate(perguntas):
-                st.markdown(f"""<div class="question-box"><div class="question-header">QUESTÃO CRUCIAL {i+1}</div>{p}</div>""", unsafe_allow_html=True)
-                if st.checkbox(f"Sim, eu atendo/possuo este item.", key=f"q_{i}"): score_checks += 1
-            st.divider()
-            st.metric("Sua Prontidão", f"{score_checks}/10")
-            if score_checks == 10: st.success("🏆 EXCELENTE! Você cobriu todos os pontos críticos.")
-            elif score_checks >= 7: st.info("⚠️ Faltam alguns pontos. Verifique o que não marcou.")
-            else: st.error("🛑 CUIDADO! Muitos pontos cruciais estão pendentes.")
-    else: st.info("ℹ️ Faça a análise na Aba 1 para gerar este questionário personalizado.")
+    st.markdown("### ❓ Checklist de Eliminação")
+    if st.session_state['resultado']:
+        perguntas = st.session_state['resultado'].get('perguntas_cruciais', [])
+        score = 0
+        for i, p in enumerate(perguntas):
+            st.markdown(f"""<div class="question-box"><div class="question-header">CRITÉRIO {i+1}</div>{p}</div>""", unsafe_allow_html=True)
+            if st.checkbox("Sim, atendo este requisito.", key=f"q_{i}"): score += 1
+        st.divider()
+        st.metric("Seu Score", f"{score}/10")
+        if score == 10: st.balloons(); st.success("🏆 EXCELENTE!")
+        elif score >= 7: st.warning("⚠️ CUIDADO: Faltam itens importantes.")
+        else: st.error("🛑 PERIGO: Risco alto de inabilitação.")
+    else: st.info("Faça a análise primeiro.")
 
-with tab_checklist:
-    st.markdown("### 📍 Timeline de Execução")
-    if st.session_state.get('resultado_analise') == "PRONTO":
-        dados = st.session_state.get('dados_analise', {})
-        checklist = dados.get('plano_acao_cronograma', [])
-        for item in checklist:
-            data_tarefa = item.get('data', 'S/D')
-            acao_tarefa = item.get('tarefa', '')
-            st.markdown(f"""<div class="timeline-box"><div class="timeline-dot"></div><div class="timeline-date">{data_tarefa}</div><div class="timeline-content">{acao_tarefa}</div></div>""", unsafe_allow_html=True)
-        st.info("💡 Dica: Esta timeline está inclusa no 'Relatório Completo (PDF)' na Aba 1.")
-    else: st.info("ℹ️ Faça a análise na Aba 1 para gerar sua Linha do Tempo.")
+# --- ABA 4: TIMELINE ---
+with tab_crono:
+    st.markdown("### 📍 Linha do Tempo")
+    if st.session_state['resultado']:
+        for item in st.session_state['resultado'].get('plano_acao_cronograma', []):
+            st.markdown(f"""<div class="timeline-box"><div class="timeline-dot"></div><div class="timeline-date">{item.get('data')}</div><div class="timeline-content">{item.get('tarefa')}</div></div>""", unsafe_allow_html=True)
+    else: st.info("Aguardando análise...")
+
+# --- ABA 5: ROTEIRO ---
+with tab_gps:
+    st.markdown("### 📝 Roteiro do Projeto (GPS)")
+    if st.session_state['resultado']:
+        for passo in st.session_state['resultado'].get('guia_escrita', []):
+            alerta = passo.get('alerta_proibicao', 'Nenhum')
+            html_alerta = f'<div class="guide-warning">🚨 CUIDADO: {alerta}</div>' if alerta and alerta != "Nenhum" else ""
+            st.markdown(f"""
+            <div class="guide-box">
+                <div class="guide-title">{passo.get('secao')}</div>
+                <div class="guide-suggestion">{passo.get('analise_do_edital')}</div>
+                <div class="guide-source">📍 Fonte: {passo.get('citacao_edital')}</div>
+                {html_alerta}
+            </div>
+            """, unsafe_allow_html=True)
+    else: st.info("Faça a análise na Aba 2 para gerar o Roteiro.")
