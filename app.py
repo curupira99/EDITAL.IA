@@ -703,3 +703,4 @@ with tab_gps:
             </div>
             """, unsafe_allow_html=True)
     else: st.info("Faça a análise na Aba 2 para gerar o Roteiro.")
+
